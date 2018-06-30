@@ -1,5 +1,5 @@
 # Site settings
-title: 徐浩博的个人博客
+title: 不忘初心
 SEOTitle: 浩博的博客 | BY Blog
 header-img: img/post-bg-desk.jpg
 email: xhb3909@sina.com
@@ -14,14 +14,12 @@ sidebar: true                           # whether or not using Sidebar.
 sidebar-about-description: "Goals determine what you going to be!"
 sidebar-avatar: img/wo.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
 
-
-
 # SNS settings
 RSS: false
 # weibo_username:     qiubaiying
 zhihu_username:     haoboxu
 github_username:    xhb3909
-#facebook_username:  baiying.qiu.7
+facebook_username:  haoboxu
 jianshu_username:   e71990ada2fd
 #twitter_username:   qiubaiying
 
