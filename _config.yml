@@ -1,13 +1,13 @@
 # Site settings
 title: 不忘初心
-SEOTitle: 浩博的博客 | BY Blog
+SEOTitle: 浩博的博客
 header-img: img/post-bg-desk.jpg
 email: xhb3909@sina.com
 description: "Every failure is leading towards success."
-keyword: "BY, BY Blog, 浩博的博客, haoboxu, 徐浩博, java, python, linux"
+keyword: "浩博的博客, haoboxu, 徐浩博, java, python, linux"
 url: "http://xhb3909.github.io"          # your host, for absolute URL
 baseurl: ""      # for example, '/blog' if your blog hosted on 'host/blog'
-github_repo: "https://github.com/qiubaiying/qiubaiying.github.io.git" # you code repository
+github_repo: "https://github.com/xhb3909/xhb3909.github.io.git" # you code repository
 
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
@@ -54,7 +54,7 @@ kramdown:
 
 # 评论系统
 # Disqus settings（https://disqus.com/）
-disqus_username: qiubaiying
+disqus_username: haoboxu
 
 # 多说 将于2017年6月1日正式关停服务，建议使用 Disqus（http://dev.duoshuo.com/threads/58d1169ae293b89a20c57241）
 # Duoshuo settings
@@ -90,18 +90,3 @@ service-worker: true
 
 
 # Friends
-friends: [
-    {
-        title: "WY",
-        href: "http://zhengwuyang.com"
-    },{
-        title: "简书·BY",
-        href: "http://www.jianshu.com/u/e71990ada2fd"
-    },{
-        title: "Apple",
-        href: "https://apple.com"
-    },{
-        title: "Apple Developer",
-        href: "https://developer.apple.com/"
-    }
-]
