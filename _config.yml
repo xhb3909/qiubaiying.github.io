@@ -1,10 +1,10 @@
 # Site settings
-title: 不忘初心
+title: 菜鸟博
 SEOTitle: 浩博的博客
 header-img: img/home-bg-art.jpg
 email: xhb3909@sina.com
 description: "Every failure is leading towards success."
-keyword: "浩博的博客, haoboxu, 徐浩博, java, python, linux"
+keyword: "haobo的博客, haoboxu"
 url: "http://xhb3909.github.io"          # your host, for absolute URL
 baseurl: ""      # for example, '/blog' if your blog hosted on 'host/blog'
 github_repo: "https://github.com/xhb3909/xhb3909.github.io.git" # you code repository
@@ -12,7 +12,7 @@ github_repo: "https://github.com/xhb3909/xhb3909.github.io.git" # you code repos
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
 sidebar-about-description: "Goals determine what you going to be!"
-sidebar-avatar: img/wo1.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
+sidebar-avatar: img/suolong.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
 
 # SNS settings
 RSS: false
