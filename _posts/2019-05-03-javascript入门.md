@@ -1,12 +1,13 @@
 ---
 layout:     post
-title:      javascript入门
+title:      javascript快速入门
 date:       2019-05-03
 author:     haobo
-header-img: img/post-bg-cook.jpg
+header-img: img/home-bg.jpg
 catalog: true
 tags:
-    - 前端 js
+    - js
+    - 前端
 ---
 
 # 快速入门
