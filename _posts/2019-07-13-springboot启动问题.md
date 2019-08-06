@@ -4,7 +4,7 @@ title:      spring boot jackson bind exception
 subtitle:   spring boot 整合spark、hive、出现的问题 
 date:       2019-07-13 
 author:     haobo
-header-img: img/post-bg-mma-3.jpg
+header-img: img/post-bg-ios10.jpg
 catalog: true
 tags:
     - springboot 
