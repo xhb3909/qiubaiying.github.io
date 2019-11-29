@@ -7,11 +7,11 @@ author:     haobo
 header-img: img/post-bg-ios10.jpg
 catalog: true
 tags:
-    - springboot 
+    - springBoot 
 ---
 
 
-# spring boot 整合spark、hive、hbase报错
+# spring boot 整合spark、hive、HBase报错
 
 ## maven 相关配置如下
 
@@ -33,7 +33,7 @@ tags:
 	</dependencies>
 ```
 
-### 子pom直接引用父pom关于jackson-databind的依赖
+### 子pom直接引用父pom关于jackson-dataBind的依赖
 
 ```
 项目运行起来报错:
