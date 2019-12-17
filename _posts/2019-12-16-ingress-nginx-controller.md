@@ -5,6 +5,7 @@ date:       2019-12-16
 author:     xhb
 header-img: img/post-bg-debug.png
 catalog: true
+sid: 20191216
 tags:
     - kubernetes
 ---
@@ -30,3 +31,8 @@ html-render服务使用的是`nginx`内置的缓存，具体配置如下:
 从而，不必在upstream到上游服务。
 因为快站c端的qps比较高，所以针对html-render部署的pod容器个数就会很多，这样同一个请求其实会被打散到不同的容器里，所以根本不能很好的利用上
 缓存。😿
+
+### 一致性hash
+我先来讲讲一致性hash是怎么一回事吧，毕竟这篇文章和一致性hash有很大的关系。一致性Hash算法使用取模的方法，取模法针对`nginx upstream`的数量
+进行取模，而一致性Hash算法是对2^32取模，什么意思呢？简单来说，一致性Hash算法将整个哈希值空间组织成一个虚拟的圆环，
+如假设某哈希函数H的值空间为0-2^32-1（即哈希值是一个32位无符号整形），整个哈希环如下：
