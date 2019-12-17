@@ -68,7 +68,7 @@ html-render服务使用的是`nginx`内置的缓存，具体配置如下:
 [!k8s-controller](https://pic.kuaizhan.com/g3/e6/8e/e4b9-c4a2-41c8-a749-508c217d6a3897)
 控制器要做的第一件事，是从 Kubernetes 的 APIServer 里获取它所关心的对象，比如Ingress。
 APIServer 是master节点下，负责API服务的。以及集群的持久化数据,也都是由APIServer处理之后保存到`etcd`中。
-[!master](https://xhb3909.github.io/img/custom/master.png)
+[!master](https://pic.kuaizhan.com/g3/9d/38/9a17-b2ec-40bb-8fe7-d1555d71eba810)
 其余两个组件 `kube-scheduler`: 负责容器调度, `kube-controller-manager`: 负责容器编排。
 继续说控制器. 获取对象的操作，依靠的是一个叫作 Informer（通知器）的代码库完成的。
 * Informer的第一个职责是同步本地缓存。
@@ -503,7 +503,7 @@ kubectl apply -f html-render-ingress.yaml
 kubectl exec -n ingress-nginx nginx-ingress-controller-5cd5655c57-fjq7f cat /etc/nginx/nginx.conf
 ```
 > 使用如下命令看到的配置文件
-[!linux-1](https://xhb3909.github.io/img/custom/linux-1.png)
+[!linux-1](https://pic.kuaizhan.com/g3/6a/8a/79ab-9ba3-402c-be0e-e46519b367c618)
 > 图中我们看出配置的规则已经生效了，当访问路径的时候直接请求到html-render-pre的后端服务，为了测试一致性hash，html-render-pre的容器个数
 设置为5个
 
@@ -519,16 +519,16 @@ url.log里面写了很多个快站c端的url
 
 ### 源码探究`ingress-nginx-controller`的一致性hash奥秘
 不得不看看源码如何处理的一致性hash。首先我观测到`nginx.conf`文件中关于upstream的代码
-[!linux-2](https://xhb3909.github.io/img/custom/linux-2.png)
+[!linux-2](https://pic.kuaizhan.com/g3/20/d5/ce10-e01c-4217-b75f-321102cf09ee50)
 发现它是通过lua动态获取的endpoints数据，调用了balance.balance()的代码，于是我在github上下载了`ingress-nginx`的项目，找到了
 balance.lua文件，这里执行的获取balance的操作
-[!lua-0](https://xhb3909.github.io/img/custom/lua-0.png)
+[!lua-0](https://pic.kuaizhan.com/g3/53/9c/8fae-6f14-4a56-a868-0891d95c279699)
 定位到balance其实通过就是implement对象，具体代码如下所示
-[!lua-1](https://xhb3909.github.io/img/custom/lua-1.png)
+[!lua-1](https://pic.kuaizhan.com/g3/32/bd/34f7-398e-4745-9d1b-13b2cb80a43b48)
 发现了很重要的一点，如果选择的是一致性hash，则会使用`chash`这个对象。接下来，则全局搜索`chash`，发现正是一致性hash代码实现的核心逻辑
-[!lua-2](https://xhb3909.github.io/img/custom/lua-2.png)
+[!lua-2](https://pic.kuaizhan.com/g3/76/0b/8c1d-55d1-4459-bd95-f774ae10761745)
 重点就是balance方法，调用了util模块下的lua_ngx_var，我们来看一下这块代码
-[!lua-3](https://xhb3909.github.io/img/custom/lua-3.png)
+[!lua-3](https://pic.kuaizhan.com/g3/51/78/d69e-f613-4d7a-8f16-34566dcc082003)
 发现问题了没有，原来一致性hash只支持传入单个变量，如果我传入的是$host$request_uri，最后会给我变成host$request_uri，这个变量，通过ngx.var
 获取不到任何值!!
 
@@ -543,7 +543,7 @@ balance.lua文件，这里执行的获取balance的操作
 
 但其实这样的配置还是有问题的，就是当服务的节点数增多，其实就会和我上文讲到的一致性hash原理那样，同样存在热点问题。
 这时候想到的方式就是控制器有没有类似weight的参数配置，但是翻阅整个文档，都没有发现有这个参数的配置，只好查看源码。发现
-[!lua-4](https://xhb3909.github.io/img/custom/lua-4.png)代码里默认配置了weight为1，一口老血吐出来。这样只能后端服务部署多个节点。
+[!lua-4](https://pic.kuaizhan.com/g3/0a/8f/57f5-7b3b-4c89-a105-3d9083cde1af45)代码里默认配置了weight为1，一口老血吐出来。这样只能后端服务部署多个节点。
 来解决没有虚拟节点带来的热点问题。
 
 但是别急，`nginx`控制器还是想到了这一点
