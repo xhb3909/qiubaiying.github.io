@@ -504,6 +504,63 @@ kubectl exec -n ingress-nginx nginx-ingress-controller-5cd5655c57-fjq7f cat /etc
 ```
 > 使用如下命令看到的配置文件
 [!linux-1](https://xhb3909.github.io/img/custom/linux-1.png)
-> 图中我们看出配置的规则已经生效了，当访问路径的时候直接请求到html-render-pre的后端服务
+> 图中我们看出配置的规则已经生效了，当访问路径的时候直接请求到html-render-pre的后端服务，为了测试一致性hash，html-render-pre的容器个数
+设置为5个
 
-接下来要模拟多个请求访问服务，看看配置的一致性hash是否生效
+接下来要模拟多个请求访问服务，看看配置的一致性hash是否生效，这里使用http_load工具，因为它支持多个不同url的请求来并发访问服务
+```shell
+http_load -rate 100 -seconds 10 url.log
+-rate 简写-p ：含义是每秒的访问频率
+-seconds简写-s ：含义是总计的访问时间
+url.log里面写了很多个快站c端的url
+```
+> 执行过程中发现了一个很奇怪的现象，就是所有的请求，并没有均匀分配，而是都打到了同一个节点。
+奇怪，明明配置了一致性hash的参数是`$host$request_uri`，但是感觉没有生效。
+
+### 源码探究`ingress-nginx-controller`的一致性hash奥秘
+不得不看看源码如何处理的一致性hash。首先我观测到`nginx.conf`文件中关于upstream的代码
+[!linux-2](https://xhb3909.github.io/img/custom/linux-2.png)
+发现它是通过lua动态获取的endpoints数据，调用了balance.balance()的代码，于是我在github上下载了`ingress-nginx`的项目，找到了
+balance.lua文件，这里执行的获取balance的操作
+[!lua-0](https://xhb3909.github.io/img/custom/lua-0.png)
+定位到balance其实通过就是implement对象，具体代码如下所示
+[!lua-1](https://xhb3909.github.io/img/custom/lua-1.png)
+发现了很重要的一点，如果选择的是一致性hash，则会使用`chash`这个对象。接下来，则全局搜索`chash`，发现正是一致性hash代码实现的核心逻辑
+[!lua-2](https://xhb3909.github.io/img/custom/lua-2.png)
+重点就是balance方法，调用了util模块下的lua_ngx_var，我们来看一下这块代码
+[!lua-3](https://xhb3909.github.io/img/custom/lua-3.png)
+发现问题了没有，原来一致性hash只支持传入单个变量，如果我传入的是$host$request_uri，最后会给我变成host$request_uri，这个变量，通过ngx.var
+获取不到任何值!!
+
+找到了问题关键，本来想在github上针对`ingress-nginx`项目提一个issue，但是一搜索发现已经有人提出了这个问题，并且有一个merge request正是
+关于这块逻辑的优化，支持多个参数的一致性hash，不过最终没有通过代码提审。感兴趣的伙伴可以看看这个issue
+* https://github.com/kubernetes/ingress-nginx/issues/3458
+* https://github.com/kubernetes/ingress-nginx/pull/3460/commits/69451b69323062d4847db3864863af7d1b77f9cb
+
+最终把$host$request_uri改成$host就可以均匀分配到每个节点。
+
+### 部署方式还有问题
+
+但其实这样的配置还是有问题的，就是当服务的节点数增多，其实就会和我上文讲到的一致性hash原理那样，同样存在热点问题。
+这时候想到的方式就是控制器有没有类似weight的参数配置，但是翻阅整个文档，都没有发现有这个参数的配置，只好查看源码。发现
+[!lua-4](https://xhb3909.github.io/img/custom/lua-4.png)代码里默认配置了weight为1，一口老血吐出来。这样只能后端服务部署多个节点。
+来解决没有虚拟节点带来的热点问题。
+
+但是别急，`nginx`控制器还是想到了这一点
+官方文档描述
+```
+"subset" hashing can be enabled setting nginx.ingress.kubernetes.io/upstream-hash-by-subset: "true". 
+This maps requests to subset of nodes instead of a single one. 
+upstream-hash-by-subset-size determines the size of each subset (default 3).
+
+```
+大致意思是说，使用子集的方式。这会将请求映射到节点的子集，而不是单个请求。子集大小的上游哈希值确定每个子集的大小（默认为3）。这样其实就可以
+在一致性hash和热点之间做出一个比较好的平衡.
+
+如果只是单纯的想用负载均衡的功能，可以指定`nginx.ingress.kubernetes.io/service-upstream`为true。
+因为默认情况下，`NGINX`入口控制器使用`NGINX`上游配置中所有端点（Pod IP /端口）的列表。
+对于零停机时间部署之类的事情，这可能是理想的，因为它减少了Pod上下时重新加载`NGINX`配置的需求。避免了pod容器个数发生更新，而更新lua的动态内存。
+
+### 尾声
+降了真么多，想必大家对`ingress-nginx-controller`有了一个大概的认识，但是我还是建议搭建如果要使用的话，需要多看看文档，选择适合你们自己公司的一个
+方案。我们要勇于拥抱新的技术🤗。
