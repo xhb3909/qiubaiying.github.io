@@ -566,5 +566,5 @@ upstream-hash-by-subset-size determines the size of each subset (default 3).
 对于零停机时间部署之类的事情，这可能是理想的，因为它减少了Pod上下时重新加载`NGINX`配置的需求。避免了pod容器个数发生更新，而更新lua的动态内存。
 
 ### 尾声
-降了真么多，想必大家对`ingress-nginx-controller`有了一个大概的认识，但是我还是建议搭建如果要使用的话，需要多看看文档，选择适合你们自己公司的一个
+讲了这么多，想必大家对`ingress-nginx-controller`有了一个大概的认识，但是我还是建议搭建如果要使用的话，需要多看看文档，选择适合你们自己公司的一个
 方案。我们要勇于拥抱新的技术🤗。
