@@ -414,27 +414,29 @@ spec:
 ```
 
 看了这么多配置，是不是心里一慌。别怕，我来简单解释一下这个yaml文件要做什么:
-* ConfigMap: 允许您将配置工件与image内容分离，以使容器化的应用程序具有可移植性。简单说，就是可配置，及时pod处于运行状态，也可以
+* ConfigMap: 允许您将配置工件与image内容分离，以使容器化的应用程序具有可移植性。简单说，就是可配置，即使pod处于运行状态，也可以
 修改ConfigMap来避免`reload nginx`
 * `RBAC`: 基于角色的访问控制（Role-Based Access Control)
-> ClusterRole: 分配给角色的权限适用于整个集群
-> ClusterRoleBinding: 将ClusterRole绑定到特定帐户
-> Role: 分配给适用于特定名称空间的角色的权限
-> RoleBinding: 将角色绑定到特定帐户
-> 为了将`RBAC`应用于`nginx-ingress-controller`，应将该控制器分配给ServiceAccount.
+* ClusterRole: 分配给角色的权限适用于整个集群
+* ClusterRoleBinding: 将ClusterRole绑定到特定帐户
+* Role: 分配给适用于特定名称空间的角色的权限
+* RoleBinding: 将角色绑定到特定帐户
+* 为了将`RBAC`应用于`nginx-ingress-controller`，应将该控制器分配给ServiceAccount.
 该ServiceAccount应该绑定到为`nginx-ingress-controller`定义的Roles和ClusterRoles
 
 分配这个权限的目的是为了使`nginx-ingress-controller`能够充当跨集群的入口。
 这些权限被授予名为`nginx-ingress-clusterrole`的ClusterRole
-> `configmaps`, endpoints, nodes, pods, secrets: list, watch
-> nodes: get
-> services, ingresses: get, list, watch
-> events: create, patch
-> ingresses/status: update
+* `configmaps`, endpoints, nodes, pods, secrets: list, watch
+*  nodes: get
+*  services, ingresses: get, list, watch
+*  events: create, patch
+*  ingresses/status: update
 * Deployment: 管理`ingress nginx`pod的控制器，根据这个我们能知道绝大多数控制器本质部署的是pod
 
-* 上面的文件配置完，需要配置service yaml
+上面的文件配置完，需要配置service yaml
+
 ```YAML
+
 kind: Service
 apiVersion: v1
 metadata:
@@ -460,6 +462,7 @@ spec:
 > 通过clusterIp的方式部署service
 
 * 公司的k8s集群是在腾讯云搭建的版本是v1.13，所以执行以下命令来创建`ingress-nginx-controller`
+
 ```shell
 kubectl create namespace ingress-nginx
 kubectl apply -f ingress-nginx-deployment.yaml
@@ -467,6 +470,7 @@ kubectl apply -f ingress-nginx-service.yaml
 ```
 执行上述三个命令，就在k8s集群里新建了一个ingress 控制器
 因为默认一个ingress，只能指定一个控制器来控制它的一个声明周期，所以我们看看ingress的配置
+
 ```YAML
 apiVersion: extensions/v1beta1
 kind: Ingress
@@ -489,9 +493,9 @@ spec:
           servicePort: 80
 ```
 > 这个yaml文件配置了关于控制器的三个参数
-> `kubernetes.io/ingress.class` 指定的是`nginx`控制器，默认在腾讯云部署的值是`qcloud`是腾讯云定制的一个控制器
-> `nginx.ingress.kubernetes.io/upstream-hash-by` 指定一致性hash的一个规则，是按照当前域名+路径进行hash
-> `nginx.ingress.kubernetes.io/ssl-redirect` 禁用308的重定向请求
+* `kubernetes.io/ingress.class` 指定的是`nginx`控制器，默认在腾讯云部署的值是`qcloud`是腾讯云定制的一个控制器
+* `nginx.ingress.kubernetes.io/upstream-hash-by` 指定一致性hash的一个规则，是按照当前域名+路径进行hash
+* `nginx.ingress.kubernetes.io/ssl-redirect` 禁用308的重定向请求
 
 > 执行ingress
 ```shell
