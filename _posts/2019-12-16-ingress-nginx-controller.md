@@ -62,3 +62,46 @@ html-render服务使用的是`nginx`内置的缓存，具体配置如下:
 
 这样我们就可以比较完美的解决热点问题。对于`nginx`来说需要在upstream里指定weight字段，作为server权重，对应虚拟节点数目。
 ![upstream-ex](https://xhb3909.github.io/img/custom/upstream-ex.png)
+
+### 浅谈控制器模式
+在讲解今天的主角`ingress-nginx-controller`之前，我很想和大家分享一下k8s的控制器。我们要懂得控制器的一个大概运作原理，才能更好
+地理解`ingress-nginx-controller`. (这段内容参考极客时间张磊大神分享的自定义控制器，感兴趣的可以去看看). 话不多说，先来个图:
+[!k8s-controller](https://xhb3909.github.io/img/custom/k8s-controller.png)
+控制器要做的第一件事，是从 Kubernetes 的 APIServer 里获取它所关心的对象，比如Ingress。
+APIServer 是master节点下，负责API服务的。以及集群的持久化数据,也都是由APIServer处理之后保存到`etcd`中。
+[!master](https://xhb3909.github.io/img/custom/master.png)
+其余两个组件 `kube-scheduler`: 负责容器调度, `kube-controller-manager`: 负责容器编排。
+继续说控制器. 获取对象的操作，依靠的是一个叫作 Informer（通知器）的代码库完成的。
+* Informer的第一个职责是同步本地缓存。
+Informer 与 API 对象是一一对应的，所以传递给自定义控制器的，正是一个 Ingress 对象的 Informer（Ingress Informer).
+Ingress Informer 使用 ingressClient，跟 APIServer 建立了连接。不过，真正负责维护这个连接的，则是 Informer 所使用的 Reflector 包。
+Reflector 使用的是一种叫作 ListAndWatch 的方法，来“获取”并“监听”这些 Ingress 对象实例的变化。
+在 ListAndWatch 机制下，一旦 APIServer 端有新的 Ingress 实例被创建、删除或者更新，
+Reflector 都会收到“事件通知”。这时，该事件及它对应的 API 对象这个组合，就被称为增量（Delta），
+它会被放进一个 Delta FIFO Queue（增量先进先出队列）中。而另一方面，Informer 会不断地从这个 Delta FIFO Queue 里读取（Pop）增量。
+每拿到一个增量，Informer 就会判断这个增量里的事件类型，然后创建或者更新本地对象的缓存。这个缓存，在 Kubernetes 里一般被叫作 Store。
+
+* Informer的第二个职责，则是根据这些事件的类型，触发事先注册好的 ResourceEventHandler。
+这些 Handler，需要在创建控制器的时候注册给它对应的 Informer。所以操作API对象的代码逻辑是在handler里实现的。
+而具体的处理操作，都是将该事件对应的 API 对象加入到工作队列中。
+
+所谓 Informer，其实就是一个带有本地缓存和索引机制的、可以注册 EventHandler 的 client。
+它是自定义控制器跟 APIServer 进行数据同步的重要组件。更具体地说，Informer 通过一种叫作 ListAndWatch 的方法，
+把 APIServer 中的 API 对象缓存在了本地，并负责更新和维护这个缓存。
+
+接下来控制循环(Control Loop)，则会不断地从这个工作队列里拿到这些 Key，然后开始执行真正的控制逻辑。
+控制循环会等待 Informer 完成一次本地缓存的数据同步操作；并且直接通过 `goroutine` 启动一个（或者并发启动多个）“无限循环”的任务。
+真正处理API对象的逻辑则在循环当中完成。
+
+所以控制器其实是根据informer的reflector来监听并更新API对象，并通过EventHandler处理好对象放入worker queue中，最终由
+(control loop)从工作队列中取到key，执行真正的逻辑操作。
+
+* 这时候我想问大家一个问题，为什么 Informer 和自定义控制器的控制循环之间，一定要使用一个工作队列来进行 ?
+我觉得主要的原因在于 Informer 和 控制循环分开是为了解耦，防止控制循环执行过慢把Informer拖死。
+这样的设计也是为了匹配双方速度不一致，有一个中间的队列来做协调.
+
+### `ingress-nginx-controller`
+千呼万唤始出来，我们的主角终于闪亮登场了。
+
+
+
