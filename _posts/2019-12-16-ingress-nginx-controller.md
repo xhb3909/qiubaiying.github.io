@@ -100,8 +100,321 @@ Reflector 都会收到“事件通知”。这时，该事件及它对应的 API
 我觉得主要的原因在于 Informer 和 控制循环分开是为了解耦，防止控制循环执行过慢把Informer拖死。
 这样的设计也是为了匹配双方速度不一致，有一个中间的队列来做协调.
 
-### `ingress-nginx-controller`
+### `ingress-nginx-controller` 介绍
 千呼万唤始出来，我们的主角终于闪亮登场了。
+官方网址`https://kubernetes.github.io/ingress-nginx/`
+首先来说一下`nginx`控制器是如何工作的
 
+#### `nginx configuration`
+Ingress控制器的目标是汇编配置文件（`nginx.conf`）。主要目的是在配置文件中进行任何更改后需要重新加载`NGINX`. 
+需要特别注意的是，我们不会在仅影响上游配置的更改中重新加载`Nginx`（即，在部署应用程序时端点EndPoints更改）。
+因为使用了`lua-nginx-module`实现这一目标
 
+#### `Building the NGINX model`
+* 按CreationTimestamp字段对Ingress规则进行排序，即先按旧规则。
+* 如果在多个Ingress中为同一主机定义了相同路径，则最早的规则将获胜。
+* 如果多个Ingress包含同一主机的TLS部分，则最早的规则将获胜。
+* 如果多个Ingress定义了一个影响Server块配置的注释，则最早的规则将获胜。
+* 创建`NGINX`服务器列表（按主机名）
+* 创建`NGINX`上游列表
+* 如果多个入口为同一主机定义了不同的路径，则入口控制器将合并这些定义。
+* 注释将应用于Ingress中的所有路径。
+* 多个Ingress可以定义不同的注释。这些定义在Ingress之间不共享。
 
+#### `When a reload is required`
+* 创建新的Ingress resource
+* TLS部分已添加到现有Ingress
+* Ingress annotation的更改不仅影响上游配置，而且影响更大。例如，负载平衡注释不需要重新加载。
+* 从Ingress添加/删除路径。
+* Ingress, Service, Secret 被删除
+* 可以从Ingress获得一些缺少的引用对象，例如Service或Secret。
+* Secret更新
+
+#### `Avoiding reloads`
+在某些情况下，可以避免重新加载，尤其是在端点发生更改时.例如: pod 重启或被替换.
+
+##### `Avoiding reloads on Endpoints changes`
+在每个端点更改上，控制器从其看到的所有服务中获取端点并生成相应的Backend对象。然后，将这些对象发送到在`Nginx`内部运行的Lua处理程序。 
+Lua代码又将这些后端存储在共享内存区域中。然后，对于在`balancer_by_lua`上下文中运行的每个请求，
+Lua代码将检测到应该从哪个端点选择上游对等方，并应用配置的负载均衡算法来选择对等方。
+在具有频繁部署应用程序的相对较大的集群中，此功能节省了大量`Nginx`重载，否则可能会影响响应延迟.
+
+说了这么多. 总结一下，`nginx`控制器随着ingress的更改，而需要重新reload。但是为了避免这种reload操作，我们可以使用ConfigMap更改配置。或者
+当endpoints修改的时候，控制器会根据`lua-nginx-module`来自动更新endpoints。
+
+### `ingress-nginx-controller` 部署
+首先来看一下`deployment.yaml`文件:
+```YAML
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+
+---
+
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: nginx-configuration
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: tcp-services
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: udp-services
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: nginx-ingress-serviceaccount
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: nginx-ingress-clusterrole
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - endpoints
+      - nodes
+      - pods
+      - secrets
+    verbs:
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - "extensions"
+      - "networking.k8s.io"
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "extensions"
+      - "networking.k8s.io"
+    resources:
+      - ingresses/status
+    verbs:
+      - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: nginx-ingress-role
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - pods
+      - secrets
+      - namespaces
+    verbs:
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      # Defaults to "<election-id>-<ingress-class>"
+      # Here: "<ingress-controller-leader>-<nginx>"
+      # This has to be adapted if you change either parameter
+      # when launching the nginx-ingress-controller.
+      - "ingress-controller-leader-nginx"
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+    verbs:
+      - get
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: nginx-ingress-role-nisa-binding
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: nginx-ingress-role
+subjects:
+  - kind: ServiceAccount
+    name: nginx-ingress-serviceaccount
+    namespace: ingress-nginx
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: nginx-ingress-clusterrole-nisa-binding
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: nginx-ingress-clusterrole
+subjects:
+  - kind: ServiceAccount
+    name: nginx-ingress-serviceaccount
+    namespace: ingress-nginx
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-ingress-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/part-of: ingress-nginx
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ingress-nginx
+        app.kubernetes.io/part-of: ingress-nginx
+      annotations:
+        prometheus.io/port: "10254"
+        prometheus.io/scrape: "true"
+    spec:
+      serviceAccountName: nginx-ingress-serviceaccount
+      containers:
+        - name: nginx-ingress-controller
+          image: registry.cn-hangzhou.aliyuncs.com/google_containers/nginx-ingress-controller:0.25.0
+          args:
+            - /nginx-ingress-controller
+            - --configmap=$(POD_NAMESPACE)/nginx-configuration
+            - --tcp-services-configmap=$(POD_NAMESPACE)/tcp-services
+            - --udp-services-configmap=$(POD_NAMESPACE)/udp-services
+            - --publish-service=$(POD_NAMESPACE)/ingress-nginx
+            - --annotations-prefix=nginx.ingress.kubernetes.io
+          securityContext:
+            allowPrivilegeEscalation: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+            # www-data -> 33
+            runAsUser: 33
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - name: http
+              containerPort: 80
+            - name: https
+              containerPort: 443
+          livenessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 10254
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /healthz
+              port: 10254
+              scheme: HTTP
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+---
+
+```
+
+看了这么多配置，是不是心里一慌。别怕，我来简单解释一下这个yaml文件要做什么:
+ConfigMap: 允许您将配置工件与image内容分离，以使容器化的应用程序具有可移植性。简单说，就是可配置，及时pod处于运行状态，也可以
+修改ConfigMap来避免`reload nginx`
+`RBAC`: 
