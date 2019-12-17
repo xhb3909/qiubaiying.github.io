@@ -28,7 +28,6 @@ tags:
 html-render服务使用的是`nginx`内置的缓存，具体配置如下:
 ![cache](https://xhb3909.github.io/img/custom/cache.png)
 如果100s之内访问过某个容器，就会在当前容器里面保存有当前请求域名+路径的缓存值，所以下次如果还能请求到这个容器，就可以利用上`nginx`缓存。
-从而，不必在upstream到上游服务。
 因为快站c端的qps比较高，所以针对html-render部署的pod容器个数就会很多，这样同一个请求其实会被打散到不同的容器里，所以根本不能很好的利用上
 缓存。😿
 
@@ -415,6 +414,96 @@ spec:
 ```
 
 看了这么多配置，是不是心里一慌。别怕，我来简单解释一下这个yaml文件要做什么:
-ConfigMap: 允许您将配置工件与image内容分离，以使容器化的应用程序具有可移植性。简单说，就是可配置，及时pod处于运行状态，也可以
+* ConfigMap: 允许您将配置工件与image内容分离，以使容器化的应用程序具有可移植性。简单说，就是可配置，及时pod处于运行状态，也可以
 修改ConfigMap来避免`reload nginx`
-`RBAC`: 
+* `RBAC`: 基于角色的访问控制（Role-Based Access Control)
+> ClusterRole: 分配给角色的权限适用于整个集群
+> ClusterRoleBinding: 将ClusterRole绑定到特定帐户
+> Role: 分配给适用于特定名称空间的角色的权限
+> RoleBinding: 将角色绑定到特定帐户
+> 为了将`RBAC`应用于`nginx-ingress-controller`，应将该控制器分配给ServiceAccount.
+该ServiceAccount应该绑定到为`nginx-ingress-controller`定义的Roles和ClusterRoles
+
+分配这个权限的目的是为了使`nginx-ingress-controller`能够充当跨集群的入口。
+这些权限被授予名为`nginx-ingress-clusterrole`的ClusterRole
+> `configmaps`, endpoints, nodes, pods, secrets: list, watch
+> nodes: get
+> services, ingresses: get, list, watch
+> events: create, patch
+> ingresses/status: update
+* Deployment: 管理`ingress nginx`pod的控制器，根据这个我们能知道绝大多数控制器本质部署的是pod
+
+* 上面的文件配置完，需要配置service yaml
+```YAML
+kind: Service
+apiVersion: v1
+metadata:
+  name: ingress-nginx
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: tcp-80-80-cluster
+  selector:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+  sessionAffinity: None
+
+```
+> 通过clusterIp的方式部署service
+
+* 公司的k8s集群是在腾讯云搭建的版本是v1.13，所以执行以下命令来创建`ingress-nginx-controller`
+```shell
+kubectl create namespace ingress-nginx
+kubectl apply -f ingress-nginx-deployment.yaml
+kubectl apply -f ingress-nginx-service.yaml 
+```
+执行上述三个命令，就在k8s集群里新建了一个ingress 控制器
+因为默认一个ingress，只能指定一个控制器来控制它的一个声明周期，所以我们看看ingress的配置
+```YAML
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: kuaizhan-wap
+  namespace: kuaizhan-cl
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$host$request_uri"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+
+spec:
+  rules:
+  - host:
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: html-render-pre
+          servicePort: 80
+```
+> 这个yaml文件配置了关于控制器的三个参数
+> `kubernetes.io/ingress.class` 指定的是`nginx`控制器，默认在腾讯云部署的值是`qcloud`是腾讯云定制的一个控制器
+> `nginx.ingress.kubernetes.io/upstream-hash-by` 指定一致性hash的一个规则，是按照当前域名+路径进行hash
+> `nginx.ingress.kubernetes.io/ssl-redirect` 禁用308的重定向请求
+
+> 执行ingress
+```shell
+kubectl apply -f html-render-ingress.yaml 
+```
+
+> 执行这个命令的同时，`ingress nginx`控制器会自动更新当前ingress的配置，
+```shell
+kubectl exec -n ingress-nginx nginx-ingress-controller-5cd5655c57-fjq7f cat /etc/nginx/nginx.conf
+```
+> 使用如下命令看到的配置文件
+[!linux-1](https://xhb3909.github.io/img/custom/linux-1.png)
+> 图中我们看出配置的规则已经生效了，当访问路径的时候直接请求到html-render-pre的后端服务
+
+接下来要模拟多个请求访问服务，看看配置的一致性hash是否生效
