@@ -22,9 +22,9 @@ tags:
 这时页面的响应速度会有比较大的提升。为了让读者能够更全面的了解整个调用链路，这里我来展示一下我们公司的服务部署结构图
 ![快站服务](https://pic.kuaizhan.com/g3/48/cf/c75c-efda-4863-a5de-19d2f95d8ef236)
 这个图里面，我简单说一下C端页面的一个访问流程，访问c端链接，
-经过外网负载均衡`kzno`(这个项目是`nginx+openresty`主要承担快站的外网和内网的路由分发、频率限制等功能)
+经过外网负载均衡`kzxx`(这个项目是`nginx+openresty`主要承担快站的外网和内网的路由分发、频率限制等功能)
 访问到gateway(这是用go写的一个网关服务，主要的作用是鉴权、域名识别、转发服务等功能)。gateway通过`k8s service dns name` 比如
-`html-render.kuaizhan-cl.svc.cluster.local:80`把当前的请求转发到c端的服务html-render，服务里面部署的是`nginx + PHP`的组合。
+`html-xx.kuaizhan-xx.svc.cluster.local:80`把当前的请求转发到c端的服务html-xx，服务里面部署的是`nginx + PHP`的组合。
 html-render服务使用的是`nginx`内置的缓存，具体配置如下:
 ![cache](https://pic.kuaizhan.com/g3/97/c4/fcbe-f021-4ce0-ac01-ac483c397a2038)
 如果100s之内访问过某个容器，就会在当前容器里面保存有当前请求域名+路径的缓存值，所以下次如果还能请求到这个容器，就可以利用上`nginx`缓存。
@@ -499,7 +499,7 @@ spec:
 
 > 执行ingress
 ```shell
-kubectl apply -f html-render-ingress.yaml 
+kubectl apply -f html-xx-ingress.yaml 
 ```
 
 > 执行这个命令的同时，`ingress nginx`控制器会自动更新当前ingress的配置，
@@ -547,7 +547,7 @@ balance.lua文件，这里执行的获取balance的操作
 
 但其实这样的配置还是有问题的，就是当服务的节点数增多，其实就会和我上文讲到的一致性hash原理那样，同样存在热点问题。
 这时候想到的方式就是控制器有没有类似weight的参数配置，但是翻阅整个文档，都没有发现有这个参数的配置，只好查看源码。发现
-![lua-4](https://pic.kuaizhan.com/g3/0a/8f/57f5-7b3b-4c89-a105-3d9083cde1af45)代码里默认配置了weight为1，一口老血吐出来。这样只能后端服务部署多个节点。
+![lua-4](https://pic.kuaizhan.com/g3/0a/8f/57f5-7b3b-4c89-a105-3d9083cde1af45)代码里默认配置了weight为1。这样只能后端服务部署多个节点。
 来解决没有虚拟节点带来的热点问题。
 
 但是别急，`nginx`控制器还是想到了这一点
@@ -566,5 +566,5 @@ upstream-hash-by-subset-size determines the size of each subset (default 3).
 对于零停机时间部署之类的事情，这可能是理想的，因为它减少了Pod上下时重新加载`NGINX`配置的需求。避免了pod容器个数发生更新，而更新lua的动态内存。
 
 ### 尾声
-讲了这么多，想必大家对`ingress-nginx-controller`有了一个大概的认识，但是我还是建议搭建如果要使用的话，需要多看看文档，选择适合你们自己公司的一个
-方案。我们要勇于拥抱新的技术🤗。
+讲了这么多，想必大家对`ingress-nginx-controller`有了一个大概的认识，但是我还是大家如果要使用`nginx`控制器的话，需要多看看文档，
+选择适合你们自己公司的一个方案。我们要勇于拥抱新的技术🤗。
