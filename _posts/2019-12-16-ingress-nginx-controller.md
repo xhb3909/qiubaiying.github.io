@@ -24,7 +24,7 @@ tags:
 这个图里面，我简单说一下C端页面的一个访问流程，访问c端链接，
 经过外网负载均衡`kzxx`(这个项目是`nginx+openresty`主要承担快站的外网和内网的路由分发、频率限制等功能)
 访问到gateway(这是用go写的一个网关服务，主要的作用是鉴权、域名识别、转发服务等功能)。gateway通过`k8s service dns name` 比如
-`html-xx.kuaizhan-xx.svc.cluster.local:80`把当前的请求转发到c端的服务html-xx，服务里面部署的是`nginx + PHP`的组合。
+`html-render.kuaizhan-xx.svc.cluster.local:80`把当前的请求转发到c端的服务html-render，服务里面部署的是`nginx + PHP`的组合。
 html-render服务使用的是`nginx`内置的缓存，具体配置如下:
 ![cache](https://pic.kuaizhan.com/g3/97/c4/fcbe-f021-4ce0-ac01-ac483c397a2038)
 如果100s之内访问过某个容器，就会在当前容器里面保存有当前请求域名+路径的缓存值，所以下次如果还能请求到这个容器，就可以利用上`nginx`缓存。
@@ -499,7 +499,7 @@ spec:
 
 > 执行ingress
 ```shell
-kubectl apply -f html-xx-ingress.yaml 
+kubectl apply -f html-render-ingress.yaml 
 ```
 
 > 执行这个命令的同时，`ingress nginx`控制器会自动更新当前ingress的配置，
