@@ -122,7 +122,7 @@ Web UI is at http://<hostname>:7070/kylin
 
 使用`kylin`:
 
-`Kylin` 启动后您可以通过浏览器 http://<hostname>:7070/kylin 进行访问。其中 <hostname> 为具体的机器名、IP 地址或域名，默认端口为 7070。
+`Kylin` 启动后您可以通过浏览器 http://hostname:7070/kylin 进行访问。其中 hostname为具体的机器名、IP 地址或域名，默认端口为 7070。
 初始用户名和密码是 ADMIN/KYLIN。服务器启动后，您可以通过查看 $KYLIN_HOME/logs/kylin.log 获得运行时日志。
 
 访问界面如图所示:
@@ -132,4 +132,4 @@ Web UI is at http://<hostname>:7070/kylin
 ![登录之后](https://pic.kuaizhan.com/g3/00/b7/5b79-d73c-4a16-8acc-eeaa35a75cf906)
 
 # 总结
-这样我们就完成了在emr集群搭建`kylin`，之后的博客我会分享如何使用在`kylin`上进行配置cube，有哪些调优的点需要注意。感谢大家的观看。
+这样我们就完成了在emr集群搭建`kylin`，之后的博客我会分享如何在`kylin`上配置model和cube，有哪些调优的点需要注意。感谢大家的观看。
