@@ -8,6 +8,7 @@ catalog: true
 sid: 20200112
 tags:
     - kylin
+    - hadoop
 ---
 
 # 开篇
