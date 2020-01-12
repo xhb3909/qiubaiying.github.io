@@ -1,7 +1,7 @@
 ---
 layout:     post
 title:      腾讯云弹性mapreduce部署kylin
-date:       2020-01-10
+date:       2020-01-12
 author:     xhb
 header-img: img/post-bg-iWatch.jpg
 catalog: true
