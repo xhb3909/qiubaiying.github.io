@@ -137,8 +137,25 @@ user-agent(ua)、终端类型(ct)、浏览器内核(br)、日期(ds)、小时(ho
 ## cube
 接下来就基于上面的model创建cube。
 
-首先，输入cube的名称:
+首先，输入cube的名称 (Cube Info):
 * ![cube_1](https://pic.kuaizhan.com/g3/a5/89/4e05-274e-4694-b0d5-1d024a63b82270)
 
-接下来，添加cube的维度，这里我们使用站点id(TID)、页面链接(DL)、refer(R)
+接下来，添加cube的维度，这里我们使用站点id(TID)、页面链接(DL)、refer(R)、user-agent(UA)、小时(hour)、日期(DS)、域名(D1)作为维度 (Dimensions)
+* ![cube_2](https://pic.kuaizhan.com/g3/9e/11/d30b-22aa-4a73-b94b-248f1feec91b30)
 
+然后，我们可以选择添加某些度量。`kylin`默认会为我们创建一个constant的度量，可以通过count(*)函数统计相关指标。下图展示度量的配置，这里
+我要统计distinct uid和sum nu (Measures):
+* ![cube_3](https://pic.kuaizhan.com/g3/e4/1c/b9ab-a1e9-4903-982b-81b1da55480e70)
+
+下一步是(Refresh Setting)，这里我们有一些比较特殊的配置。如果当前cube是基于可分区的model设置的，我们就需要关系segment的数量，
+因为每次新的cube构建都会生成一个segment，如果segment的数量太多，就会产生大量的碎片, 导致运行时的查询引擎需要聚合多个Segment的结果才能返回
+正确的查询结果。从存储引擎的角度来说，大量的segment会带来大量的文件，这些文件会充斥系统为`kylin`所提供的命名空间，给存储空间的多个模块带来
+巨大的压力，如Zookeeper、`HDFS Namenode`等。所以基于以上原因，通过以下配置项来帮助管理Segment碎片.
+1. Auto Merge Thresholds: 允许用户设置几个层级的时间阈值，层级越靠后，时间阈值越大。举个例子，用户可以为一个cube指定层级(7天、28天)。
+每当cube中有新的segment状态变为READY的时候，会触发一次系统自动合并的尝试。系统会尝试最大一级的时间阈值，系统会查看是否能把连续的或干个
+Segment合并为一个超过28天的较大segment，在挑选连续segement过程中，如果有的segment本身的时间长度已经超过28天，那么系统会跳过该
+segment，当没有满足条件的连续segment能够累计超过28天，系统会使用下一个层级的时间阈值重复此寻找的过程。每当有满足条件的连续Segment被找到，
+系统就会触发一次自动合并Segment的构建任务。在构建任务完成后，新的segment被设置为READY状态，自动合并的整个尝试过程则需要重新执行.
+
+
+ 
